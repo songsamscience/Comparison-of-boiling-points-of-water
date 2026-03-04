@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>물 가열 곡선 실험 (50ml vs 100ml)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* 커스텀 폰트 및 UI 스타일 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .lcd-font { font-family: 'Share Tech Mono', monospace; }
+
+        /* 유리 질감 (Glassmorphism) 효과 */
+        .glass-beaker {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        /* 물 애니메이션 및 그라데이션 */
+        .water-body {
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.6) 0%, rgba(59, 130, 246, 0.8) 100%);
+            border-top: 3px solid rgba(147, 197, 253, 0.8);
+            transition: height 0.3s ease-out;
+        }
+
+        /* 전자 온도계 글로우 효과 */
+        .lcd-screen {
+            background: #0f172a;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+        .lcd-text-normal {
+            color: #4ade80;
+            text-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+        }
+        .lcd-text-boiling {
+            color: #ef4444;
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+            animation: pulse-danger 1s infinite;
+        }
+        .lcd-bg { color: rgba(74, 222, 128, 0.1); }
+
+        /* 기포 증발 애니메이션 */
+        @keyframes riseAndEscape {
+            0% { transform: translate(0, 0) scale(0.5); opacity: 0; }
+            10% { transform: translate(var(--dx1), -15px) scale(1); opacity: 0.8; }
+            50% { transform: translate(var(--dx2), -80px) scale(1.3); opacity: 0.8; }
+            100% { transform: translate(var(--dx3), -180px) scale(1.8); opacity: 0; }
+        }
+
+        .bubble {
+            position: absolute;
+            bottom: 10px;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.4));
+            border: 1px solid rgba(255,255,255,0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* 불꽃 애니메이션 */
+        @keyframes flicker {
+            0%, 100% { transform: scale(1) rotate(-2deg); opacity: 0.9; }
+            50% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+            25%, 75% { transform: scale(0.95) rotate(0deg); opacity: 0.8; }
+        }
+        .flame-active {
+            color: #ff5722;
+            text-shadow: 0 0 15px rgba(255, 87, 34, 0.8), 0 0 30px rgba(255, 193, 7, 0.6);
+            animation: flicker 0.2s infinite alternate;
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 md:p-8 flex flex-col items-center">
+
+    <div class="max-w-5xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 text-white text-center relative overflow-hidden">
+            <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')]"></div>
+            <h1 class="text-3xl font-black tracking-tight relative z-10">물 가열 곡선 시뮬레이션</h1>
+            <p class="text-blue-200 mt-2 font-medium relative z-10">질량(50ml vs 100ml)에 따른 끓는점 도달 시간 및 기화 현상 관찰</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-wrap justify-center gap-4 p-6 bg-slate-50 border-b border-slate-200 shadow-inner">
+            <button id="btn-start" class="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-play"></i> 가열 시작
+            </button>
+            <button id="btn-pause" disabled class="flex items-center gap-2 px-8 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-pause"></i> 일시정지
+            </button>
+            <button id="btn-reset" class="flex items-center gap-2 px-8 py-3 bg-slate-700 text-white rounded-xl font-bold hover:bg-slate-800 hover:shadow-lg transition-all transform hover:-translate-y-0.5">
+                <i class="fas fa-rotate-right"></i> 초기화
+            </button>
+        </div>
+
+        <!-- Visualizer Area -->
+        <div class="flex flex-col md:flex-row p-8 md:p-12 gap-8 md:gap-16 justify-center items-end bg-gradient-to-b from-white to-slate-50">
+            
+            <!-- 50ml Beaker Set -->
+            <div class="flex flex-col items-center gap-6 relative">
+                <!-- Thermometer -->
+                <div class="bg-slate-800 p-4 rounded-2xl shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] border-4 border-slate-700 w-56 relative z-30">
+                    <div class="text-xs text-slate-400 font-bold mb-2 tracking-widest text-center border-b border-slate-700 pb-1">50ml 온도계</div>
+                    <div class="lcd-screen rounded-lg p-3 text-right relative font-mono overflow-hidden">
+                        <span class="lcd-bg absolute left-3 right-3 tracking-widest text-4xl">888.8</span>
+                        <span id="temp-50" class="text-4xl tracking-widest relative z-10 font-bold lcd-text-normal transition-colors duration-300">20.0</span>
+                        <span id="unit-50" class="text-xl text-green-400 ml-1 relative z-10 transition-colors duration-300">°C</span>
+                    </div>
+                </div>
+
+                <!-- Beaker & Lamp -->
+                <div class="relative flex flex-col items-center mt-2">
+                    <!-- Bubbles Container (비커 위치와 정확히 일치시킴) -->
+                    <div id="bubbles-50" class="absolute top-0 w-36 h-48 pointer-events-none z-20"></div>
+                    <div class="w-36 h-48 glass-beaker rounded-b-[2rem] relative overflow-hidden z-10">
+                        <!-- Scale Marks -->
+                        <div class="absolute left-0 top-0 h-full w-6 border-r border-black/10">
+                            <div class="absolute bottom-[20%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">10</div>
+                            <div class="absolute bottom-[40%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">20</div>
+                            <div class="absolute bottom-[60%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">30</div>
+                            <div class="absolute bottom-[80%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">40</div>
+                        </div>
+                        <!-- Water -->
+                        <div id="water-50" class="absolute bottom-0 w-full water-body" style="height: 40%;"></div>
+                    </div>
+                    <!-- Stand & Lamp -->
+                    <div class="mt-3 flex flex-col items-center relative">
+                        <i id="flame-50" class="fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0"></i>
+                        <div class="w-16 h-10 bg-gradient-to-b from-slate-300 to-slate-400 rounded-b-xl border-2 border-slate-500 mt-2 z-10 shadow-md"></div>
+                        <div class="w-8 h-2 bg-slate-500 absolute top-2 rounded-t-md z-10"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timer / Center Display -->
+            <div class="flex flex-col items-center justify-center px-6 py-8 bg-white rounded-2xl shadow-sm border border-slate-100 self-center">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Elapsed Time</div>
+                <div class="text-5xl font-black text-blue-600 lcd-font tracking-wider"><span id="time-display">0</span><span class="text-2xl text-slate-400 ml-1">s</span></div>
+            </div>
+
+            <!-- 100ml Beaker Set -->
+            <div class="flex flex-col items-center gap-6 relative">
+                <!-- Thermometer -->
+                <div class="bg-slate-800 p-4 rounded-2xl shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] border-4 border-slate-700 w-56 relative z-30">
+                    <div class="text-xs text-slate-400 font-bold mb-2 tracking-widest text-center border-b border-slate-700 pb-1">100ml 온도계</div>
+                    <div class="lcd-screen rounded-lg p-3 text-right relative font-mono overflow-hidden">
+                        <span class="lcd-bg absolute left-3 right-3 tracking-widest text-4xl">888.8</span>
+                        <span id="temp-100" class="text-4xl tracking-widest relative z-10 font-bold lcd-text-normal transition-colors duration-300">20.0</span>
+                        <span id="unit-100" class="text-xl text-green-400 ml-1 relative z-10 transition-colors duration-300">°C</span>
+                    </div>
+                </div>
+
+                <!-- Beaker & Lamp -->
+                <div class="relative flex flex-col items-center mt-2">
+                    <!-- Bubbles Container (비커 위치와 정확히 일치시킴) -->
+                    <div id="bubbles-100" class="absolute top-0 w-36 h-48 pointer-events-none z-20"></div>
+                    <div class="w-36 h-48 glass-beaker rounded-b-[2rem] relative overflow-hidden z-10">
+                        <!-- Scale Marks -->
+                        <div class="absolute left-0 top-0 h-full w-6 border-r border-black/10">
+                            <div class="absolute bottom-[20%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">20</div>
+                            <div class="absolute bottom-[40%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">40</div>
+                            <div class="absolute bottom-[60%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">60</div>
+                            <div class="absolute bottom-[80%] w-full border-t border-black/20 text-[10px] text-slate-400 pl-1 leading-none pt-0.5">80</div>
+                        </div>
+                        <!-- Water -->
+                        <div id="water-100" class="absolute bottom-0 w-full water-body" style="height: 80%;"></div>
+                    </div>
+                    <!-- Stand & Lamp -->
+                    <div class="mt-3 flex flex-col items-center relative">
+                        <i id="flame-100" class="fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0"></i>
+                        <div class="w-16 h-10 bg-gradient-to-b from-slate-300 to-slate-400 rounded-b-xl border-2 border-slate-500 mt-2 z-10 shadow-md"></div>
+                        <div class="w-8 h-2 bg-slate-500 absolute top-2 rounded-t-md z-10"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Graph Section (Canvas) -->
+        <div class="p-8 border-t border-slate-200 bg-white">
+            <h2 class="text-xl font-bold text-slate-800 mb-6 text-center flex items-center justify-center gap-2">
+                <i class="fas fa-chart-line text-blue-500"></i> 가열 곡선 그래프
+            </h2>
+            <div class="w-full overflow-x-auto flex justify-center">
+                <canvas id="graphCanvas" width="800" height="350" class="bg-slate-50 rounded-xl border border-slate-200 shadow-sm"></canvas>
+            </div>
+            
+            <!-- Legend -->
+            <div class="flex justify-center gap-10 mt-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-1.5 bg-rose-500 rounded-full shadow-sm"></div>
+                    <span class="font-bold text-slate-700">물 50ml</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-1.5 bg-blue-500 rounded-full shadow-sm"></div>
+                    <span class="font-bold text-slate-700">물 100ml</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer (저작권 표시) -->
+        <div class="bg-slate-100 p-6 flex flex-col items-center border-t border-slate-300">
+            <h3 class="text-slate-700 font-black tracking-widest text-base mb-2">Copyright ⓒ 송쌤과학 All rights reserved.</h3>
+            <p class="text-slate-500 text-xs font-bold mb-3">본 시뮬레이션 및 교육 자료의 저작권은 송쌤과학에 있습니다.</p>
+            
+            <div class="text-slate-400 text-[11px] text-center space-y-1 bg-white px-6 py-3 rounded-lg border border-slate-200 shadow-sm">
+                <p class="font-bold text-slate-500 mb-1">▷ 저작권 사용 요소</p>
+                <p>1. 디자인 및 아이콘 출처 : Font Awesome, Tailwind CSS</p>
+                <p>2. 폰트 출처 : Noto Sans KR (구글 폰트), Share Tech Mono</p>
+                <p class="mt-2 text-rose-400 font-medium">※ 무단 복제, 배포 및 상업적 이용을 엄격히 금지합니다.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // DOM Elements
+        const btnStart = document.getElementById('btn-start');
+        const btnPause = document.getElementById('btn-pause');
+        const btnReset = document.getElementById('btn-reset');
+        const timeDisplay = document.getElementById('time-display');
+        
+        const temp50El = document.getElementById('temp-50');
+        const unit50El = document.getElementById('unit-50');
+        const water50El = document.getElementById('water-50');
+        const flame50El = document.getElementById('flame-50');
+        const bubbles50El = document.getElementById('bubbles-50');
+
+        const temp100El = document.getElementById('temp-100');
+        const unit100El = document.getElementById('unit-100');
+        const water100El = document.getElementById('water-100');
+        const flame100El = document.getElementById('flame-100');
+        const bubbles100El = document.getElementById('bubbles-100');
+
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // State variables
+        let time = 0;
+        let isRunning = false;
+        let intervalId = null;
+        let data = [{ time: 0, temp50: 20, temp100: 20 }];
+        
+        // Constants
+        const MAX_TIME = 60;
+        const START_TEMP = 20;
+        const BOILING_POINT = 100;
+        const BASE_LEVEL_50 = 40; // 50ml 기본 수위 (%)
+        const BASE_LEVEL_100 = 80; // 100ml 기본 수위 (%)
+
+        // Bubble Generation Function
+        function createBubbles(container) {
+            container.innerHTML = '';
+            for (let i = 0; i < 15; i++) {
+                const bubble = document.createElement('div');
+                bubble.classList.add('bubble');
+                
+                // Random properties for natural look
+                const size = Math.random() * 8 + 4;
+                const left = Math.random() * 70 + 15;
+                const duration = Math.random() * 0.8 + 0.8;
+                const delay = Math.random() * 1.5;
+                
+                // Movement trajectories
+                const dx1 = (Math.random() - 0.5) * 10 + 'px';
+                const dx2 = (Math.random() - 0.5) * 20 + 'px';
+                const dx3 = (Math.random() - 0.5) * 40 + 'px';
+
+                bubble.style.width = `${size}px`;
+                bubble.style.height = `${size}px`;
+                bubble.style.left = `${left}%`;
+                bubble.style.setProperty('--dx1', dx1);
+                bubble.style.setProperty('--dx2', dx2);
+                bubble.style.setProperty('--dx3', dx3);
+                bubble.style.animation = `riseAndEscape ${duration}s infinite ease-in ${delay}s`;
+                
+                container.appendChild(bubble);
+            }
+        }
+
+        // Initialize UI
+        function initUI() {
+            timeDisplay.textContent = '0';
+            
+            temp50El.textContent = '20.0';
+            temp50El.className = 'text-4xl tracking-widest relative z-10 font-bold lcd-text-normal transition-colors duration-300';
+            unit50El.className = 'text-xl text-green-400 ml-1 relative z-10 transition-colors duration-300';
+            water50El.style.height = `${BASE_LEVEL_50}%`;
+            flame50El.className = 'fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0';
+            bubbles50El.innerHTML = '';
+
+            temp100El.textContent = '20.0';
+            temp100El.className = 'text-4xl tracking-widest relative z-10 font-bold lcd-text-normal transition-colors duration-300';
+            unit100El.className = 'text-xl text-green-400 ml-1 relative z-10 transition-colors duration-300';
+            water100El.style.height = `${BASE_LEVEL_100}%`;
+            flame100El.className = 'fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0';
+            bubbles100El.innerHTML = '';
+
+            drawGraph();
+        }
+
+        // Draw Graph on Canvas
+        function drawGraph() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const pTop = 30, pRight = 40, pBottom = 50, pLeft = 60;
+            const w = canvas.width - pLeft - pRight;
+            const h = canvas.height - pTop - pBottom;
+            const maxTemp = 120;
+
+            const getX = (t) => pLeft + (t / MAX_TIME) * w;
+            const getY = (temp) => pTop + h - (temp / maxTemp) * h;
+
+            // Background grid
+            ctx.beginPath();
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            ctx.font = '12px "Noto Sans KR"';
+            ctx.fillStyle = '#64748b';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
+            // Y-axis ticks
+            for (let temp = 0; temp <= maxTemp; temp += 20) {
+                const y = getY(temp);
+                ctx.moveTo(pLeft, y);
+                ctx.lineTo(canvas.width - pRight, y);
+                ctx.fillText(`${temp}°C`, pLeft - 10, y);
+            }
+            ctx.stroke();
+
+            // 100°C Highlight Line
+            ctx.beginPath();
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(pLeft, getY(100));
+            ctx.lineTo(canvas.width - pRight, getY(100));
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 12px "Noto Sans KR"';
+            ctx.fillText('끓는점', pLeft - 10, getY(100) - 15);
+
+            // X-axis ticks
+            ctx.beginPath();
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.fillStyle = '#64748b';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (let t = 0; t <= MAX_TIME; t += 10) {
+                const x = getX(t);
+                ctx.moveTo(x, pTop);
+                ctx.lineTo(x, canvas.height - pBottom);
+                ctx.fillText(`${t}s`, x, canvas.height - pBottom + 10);
+            }
+            ctx.stroke();
+
+            // Axes lines
+            ctx.beginPath();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.moveTo(pLeft, pTop);
+            ctx.lineTo(pLeft, canvas.height - pBottom);
+            ctx.lineTo(canvas.width - pRight, canvas.height - pBottom);
+            ctx.stroke();
+
+            // Draw 100ml Line (Blue)
+            ctx.beginPath();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            data.forEach((d, i) => {
+                const x = getX(d.time);
+                const y = getY(d.temp100);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Draw 50ml Line (Red)
+            ctx.beginPath();
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            data.forEach((d, i) => {
+                const x = getX(d.time);
+                const y = getY(d.temp50);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Current Points
+            if (data.length > 0) {
+                const last = data[data.length - 1];
+                
+                // 100ml Point
+                ctx.beginPath();
+                ctx.arc(getX(last.time), getY(last.temp100), 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+
+                // 50ml Point
+                ctx.beginPath();
+                ctx.arc(getX(last.time), getY(last.temp50), 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#f43f5e';
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+
+        // Simulation Step Logic
+        function step() {
+            if (time >= MAX_TIME) {
+                stopSimulation();
+                return;
+            }
+
+            time++;
+            
+            // Calculate Temperatures
+            const temp50 = Math.min(BOILING_POINT, START_TEMP + time * 4); // Reaches 100 at 20s
+            const temp100 = Math.min(BOILING_POINT, START_TEMP + time * 2); // Reaches 100 at 40s
+
+            data.push({ time, temp50, temp100 });
+            
+            // Update UI Elements
+            timeDisplay.textContent = time;
+            temp50El.textContent = temp50.toFixed(1);
+            temp100El.textContent = temp100.toFixed(1);
+
+            // 50ml Beaker Update
+            if (temp50 >= BOILING_POINT) {
+                // LCD Red Danger mode
+                temp50El.className = 'text-4xl tracking-widest relative z-10 font-bold lcd-text-boiling transition-colors duration-300';
+                unit50El.className = 'text-xl text-red-500 ml-1 relative z-10 transition-colors duration-300';
+                
+                // 증발 로직: 끓기 시작한(20초) 후부터 서서히 수위 감소
+                const boilTime = time - 20;
+                // 수위 감소 폭을 더 크고 명확하게 수정 (0.3 -> 0.7)
+                const newLevel = BASE_LEVEL_50 - (boilTime * 0.7);
+                water50El.style.height = `${Math.max(10, newLevel)}%`;
+
+                // 기포 생성 (없을 때만 한 번)
+                if (bubbles50El.childElementCount === 0) createBubbles(bubbles50El);
+            }
+
+            // 100ml Beaker Update
+            if (temp100 >= BOILING_POINT) {
+                temp100El.className = 'text-4xl tracking-widest relative z-10 font-bold lcd-text-boiling transition-colors duration-300';
+                unit100El.className = 'text-xl text-red-500 ml-1 relative z-10 transition-colors duration-300';
+                
+                // 증발 로직: 끓기 시작한(40초) 후부터 서서히 수위 감소
+                const boilTime = time - 40;
+                // 수위 감소 폭을 더 크고 명확하게 수정 (0.3 -> 0.7)
+                const newLevel = BASE_LEVEL_100 - (boilTime * 0.7);
+                water100El.style.height = `${Math.max(20, newLevel)}%`;
+
+                if (bubbles100El.childElementCount === 0) createBubbles(bubbles100El);
+            }
+
+            drawGraph();
+        }
+
+        // Controls
+        function startSimulation() {
+            if (time >= MAX_TIME) resetSimulation();
+            isRunning = true;
+            btnStart.disabled = true;
+            btnPause.disabled = false;
+            
+            // Turn on flames
+            flame50El.className = 'fas fa-fire absolute -top-8 text-4xl flame-active z-0';
+            flame100El.className = 'fas fa-fire absolute -top-8 text-4xl flame-active z-0';
+
+            intervalId = setInterval(step, 200); // 1초를 0.2초로 시뮬레이션
+        }
+
+        function stopSimulation() {
+            isRunning = false;
+            btnStart.disabled = time >= MAX_TIME;
+            btnPause.disabled = true;
+            clearInterval(intervalId);
+            
+            // Turn off flames
+            flame50El.className = 'fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0';
+            flame100El.className = 'fas fa-fire absolute -top-8 text-4xl text-slate-300 transition-colors duration-300 z-0';
+        }
+
+        function resetSimulation() {
+            stopSimulation();
+            time = 0;
+            data = [{ time: 0, temp50: 20, temp100: 20 }];
+            btnStart.disabled = false;
+            initUI();
+        }
+
+        // Event Listeners
+        btnStart.addEventListener('click', startSimulation);
+        btnPause.addEventListener('click', stopSimulation);
+        btnReset.addEventListener('click', resetSimulation);
+
+        // Initial Render
+        initUI();
+
+    </script>
+</body>
+</html>
